@@ -34,10 +34,10 @@ pipeline {
 
         stage('Test') {
             steps {
-                echo 'Running unit tests'
                 sh '''
                     . venv/bin/activate
-                    pytest -v
+                    mkdir -p reports
+                    pytest -v --junitxml=reports/pytest.xml
                 '''
             }
         }
@@ -72,6 +72,8 @@ pipeline {
         }
 
         always {
+            junit testResults: 'reports/pytest.xml',
+              allowEmptyResults: true
             echo 'Pipeline execution finished'
         }
     }
