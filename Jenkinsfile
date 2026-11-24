@@ -19,10 +19,15 @@ pipeline {
         stage('Setup') {
             steps {
                 echo 'Installing dependencies'
+
                 sh '''
                     python3 -m venv venv
                     . venv/bin/activate
-                    pip install -r requirements.txt
+
+                    pip install \
+                        --retries 5 \
+                        --timeout 60 \
+                        -r requirements.txt
                 '''
             }
         }
