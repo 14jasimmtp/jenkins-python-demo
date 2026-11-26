@@ -1,6 +1,17 @@
-
 pipeline {
     agent any
+
+    options {
+        timeout(time: 15, unit: 'MINUTES')
+    }
+
+    parameters {
+        choice(
+            name: 'DEPLOY_ENV',
+            choices: ['dev', 'staging', 'prod'],
+            description: 'Deployment environment'
+        )
+    }
 
     environment {
         APP_NAME = 'jenkins-python-demo'
@@ -8,26 +19,12 @@ pipeline {
 
     stages {
 
-        stage('Checkout') {
-            steps {
-                echo 'Checking out source code'
-                git branch: 'main',
-                    url: 'https://github.com/14jasimmtp/jenkins-python-demo.git'
-            }
-        }
-
         stage('Setup') {
             steps {
-                echo 'Installing dependencies'
-
                 sh '''
                     python3 -m venv venv
                     . venv/bin/activate
-
-                    pip install \
-                        --retries 5 \
-                        --timeout 60 \
-                        -r requirements.txt
+                    pip install --retries 5 --timeout 60 -r requirements.txt
                 '''
             }
         }
@@ -44,37 +41,46 @@ pipeline {
 
         stage('Build') {
             steps {
-                echo 'Compiling Python files'
+                sh 'python3 -m compileall -q app.py'
+            }
+        }
+
+        stage('Package') {
+            steps {
                 sh '''
-                    python3 -m compileall -q .
+                    mkdir -p dist
+                    python3 -m zipfile -c dist/jenkins-python-demo.zip app.py
                 '''
             }
         }
 
-        stage('Run') {
+        stage('Deploy') {
+            when {
+                expression {
+                    params.DEPLOY_ENV == 'prod'
+                }
+            }
             steps {
-                echo 'Running application'
-                sh '''
-                    . venv/bin/activate
-                    python app.py
-                '''
+                echo "Deploying ${APP_NAME} to production"
             }
         }
     }
 
     post {
+        always {
+            junit testResults: 'reports/pytest.xml',
+                  allowEmptyResults: true
+
+            archiveArtifacts artifacts: 'dist/*.zip',
+                             allowEmptyArchive: true
+        }
+
         success {
-            echo 'Python pipeline completed successfully!'
+            echo 'Pipeline completed successfully!'
         }
 
         failure {
-            echo 'Python pipeline failed!'
-        }
-
-        always {
-            junit testResults: 'reports/pytest.xml',
-              allowEmptyResults: true
-            echo 'Pipeline execution finished'
+            echo 'Pipeline failed!'
         }
     }
 }
